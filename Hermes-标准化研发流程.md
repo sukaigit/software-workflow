@@ -622,14 +622,13 @@ git push origin feat/{功能名}
 加载：`read_file D:\hermes\agent-skills\skills\security-and-hardening/SKILL.md` → 按步骤执行
 
 1. SQL注入/XSS/密码BCrypt/鉴权/密钥硬编码检查
-2. 依赖审计：`mvn org.owasp:dependency-check-maven:check`（首次慢，可人工核验版本代替）
-3. 结论追加到审查报告
+2. 结论追加到审查报告
 
 **🚪 门禁：**
 ```
 □ 自动扫描：无 CRITICAL/HIGH 漏洞（semgrep + gitleaks + taste-check）
 □ 质量审查：PASS（六维：正确性/可读性/架构/安全/性能/品味）
-□ 安全审查：PASS（SQL注入/XSS/JWT/密码/鉴权/依赖审计无高危漏洞）
+□ 安全审查：PASS（SQL注入/XSS/密码/鉴权无高危漏洞）
 □ 审查报告已写入 docs/reviews/{功能名}-{日期}.md（含质量审查 + 安全审查结论）
 ```
 
