@@ -608,13 +608,15 @@ git push origin feat/{功能名}
 
 **质量审查内部顺序不可换：** 自动扫描 → 质量审查
 
+> ⚠️ 前置条件：先 `git add` 待审查文件，确保 `git diff --cached` 有内容，否则 `requesting-code-review` 的子代理审查会因空 diff 失败。
+
 自动扫描：
   - `semgrep --config=auto .`
   - `gitleaks detect --source . -v`
   - `bash scripts/taste-check.sh`
 
 质量审查（六维）：正确性/可读性/架构/安全/性能/品味
-   - 对照 `openspec/specs/{domain}/spec.md` 逐条确认需求已实现
+   - 抽查 `openspec/specs/{domain}/spec.md` 中 20% 的需求条目，确认实现与需求一致
 产出：`docs/reviews/{功能名}-{日期}.md`
 
 **安全审查（在质量审查之后执行）：**
