@@ -230,9 +230,9 @@ gh repo create {项目名} --{可见性} --source=. --remote=origin --push 2>/de
 |:---------|:-----|:-----|
 | **模块名变更** | 工时填报→工时管理 | 同步更新 spec + prototype + 权限树 |
 | **功能拆分** | 工时统计→拆为员工/项目两个子菜单 | 新增 route + render + permission |
-| **字段增删** | 项目加「所属部门」、任务去「分配人员」 | 同步更新 spec + prototype + page2Data |
+| **字段增删** | 项目加「所属部门」、任务去「分配人员」 | 同步更新 spec + prototype + 前端数据模型 |
 | **业务逻辑** | 工时仅已驳回可编辑、审批按角色过滤 | 原型条件渲染 + spec Scenario 更新 |
-| **数据驱动** | 角色/用户下拉从 page2Data 动态加载 | 不要硬编码 option 列表 |
+| **数据驱动** | 角色/用户下拉从 API 动态加载 | 不要硬编码 option/list 数据 |
 | **权限细化** | 审批链：部门经理→项目经理，项目经理→普通员工 | 影响原型数据过滤逻辑 |
 **门禁通过后提交：**
 ```bash
@@ -249,16 +249,19 @@ git push origin main
 read_file openspec/specs/{domain}/spec.md — 了解需求范围
 read_file docs/design/design-guide.md — 了解设计风格（有前端时）
 read_file docs/design/component-library.md — 了解组件库（有组件时，有前端时）
-**read_file docs/prototype/index.html（有前端时，有原型时）— 提取页面结构、数据模型（page2Data）、路由（routes）、筛选条件、表单字段，作为架构设计的输入**
+**read_file docs/prototype/index.html（有前端时，有原型时）— 提取页面结构、数据模型、路由、筛选条件、表单字段，作为架构设计的输入**
 
-**⚡ 原型 → 架构映射规则（经验）：**
-```
-原型中的 page2Data 字段定义 → 数据库表字段
-原型 renderXxx() 的筛选条件栏 → API GET 查询参数
-原型 showXxxForm() 的表单字段 → API POST/PUT 请求体
-原型 routes 对象 → Controller 模块划分
-原型 rolePermissions 对象 → RBAC 权限表结构
-原型分页逻辑 (pageState + pagination()) → 后端分页 API
+**⚡ 原型 → 架构映射规则（通用，适配所有前端技术栈）：**
+- 原型中的数据定义（Mock数据/静态列表）→ 数据库表字段
+- 原型的筛选条件栏 → API GET 查询参数
+- 原型的表单字段 → API POST/PUT 请求体
+- 原型的权限控制逻辑 → RBAC 权限表结构
+- 原型的路由/页面划分 → 前后端模块划分依据
+
+**对应技术栈参考：**
+- **原生 HTML/JS SPA：** page2Data → 数据库字段；renderXxx() 筛选栏 → API 参数；showXxxForm() 表单 → 请求体；rolePermissions → 权限表
+- **Vue：** 组件 data/mounted 中的静态数据 → 数据库字段；模板中的筛选栏 → API 参数；el-form 字段 → 请求体；vue-router + 路由守卫 → 权限表
+- **React：** 组件 state/useState 静态数据 → 数据库字段；JSX 筛选栏 → API 参数；Form 组件字段 → 请求体；react-router + 鉴权组件 → 权限表
 ```
 
 **顺序执行以下设计任务（每份完成后自动进入下一份）：**
@@ -370,216 +373,224 @@ git push origin main
 
 ### 3. 开发实施
 
-**分支策略：** 开发前 `git checkout -b feat/{功能名}`，每个任务完成后 commit 到该分支。开发完成并本地测试通过后 push 到远程，后续通过 GitHub Pull Request 合并。
+**分支策略：** 开发前 `git checkout -b feat/{功能名}`，每任务提交到该分支，完成后 push → PR 合并 main。
 
 使用 `delegate_task` 按 Plan 切片逐任务 TDD 执行子代理。
 
-**子代理 context 模板：**
-```
-使用 Superpowers TDD（RED→GREEN→REFACTOR）——全栈工程师，Plan：docs/plans/{slug}.md
+---
 
-先读取：docs/plans/{slug}.md（Plan）+ docs/architecture/architecture.md（架构）+ docs/api/接口定义.md（API 接口）+ sql/init.sql（DDL）
-有前端时额外读取：docs/design/design.css + docs/design/design-guide.md（设计风格），原型项目已存在于 docs/prototype/，**以前端原型为开发基础**
-  - **原型参照规则：**
-    1. 原型 `index.html` 中的 `renderXxx()` 函数 → 改造为 AJAX 调用后保留，**不重写前端页面**
-    2. 原型 `page2Data` 中的字段定义 → 映射到 API 响应 JSON，确保字段名一致
-    3. 原型的筛选条件栏、表单弹窗、表格列 → 对应 API 的查询参数、请求体、响应字段
-    4. 原型的 `routes + rolePermissions` → 前端路由和权限控制逻辑，**保留不变**
-    5. 原型的 CSS 样式 → 保留 `design.css`，**禁止自创样式**
-  - **数据替换模式：** `page2Data.staticData.map(...)` → `fetch('/api/xxx').then(r=>r.json()).then(data=>data.list.map(...))`
+#### 子代理 context 模板
+
+粘贴到 `delegate_task(context=...)` 中，按需微调 `{slug}` 和 `{domain}`，**并根据实际技术栈调整 Step 0 的连接检查和字段映射检查**：
+
+```
+Superpowers TDD（RED→GREEN→REFACTOR），Plan：docs/plans/{slug}.md
+
+Step 0：执行 sql/init.sql 建库建表（已存在则跳过）
+⚠️ 禁止修改数据库连接配置
+【数据库连接检查】按技术栈选：
+  - MySQL：mysql -u {应用用户} -p -e "SELECT 1;"
+  - SQLite：文件存在即 OK，跳过
+【实体字段映射检查】按技术栈选：
+  - Java/MyBatis：Entity 类须包含 resultMap 全部字段（createTime/updateTime 等）
+  - Python/SQLAlchemy：Model 类字段须与表字段一致
+  - 其他 ORM：确保实体模型与 DDL 字段对齐
+
+按 Plan 切片逐任务：RED→写单元测试+集成测试 → GREEN→实现 → REFACTOR→重构
+测试覆盖边界/中文/安全/分页等 8 类盲区
 加载：read_file D:\hermes\superpowers\skills\subagent-driven-development/SKILL.md → 按步骤执行
 加载：read_file D:\hermes\agent-skills\skills\incremental-implementation/SKILL.md → 按步骤执行
 
-Step 0: 执行 sql/init.sql 建库建表（未初始化时执行；如数据库已存在则跳过，避免重复建表报错）
-⚠️ **禁止修改数据库连接配置**（已在架构设计阶段配置好）。如需确认连接，按数据库类型测试：
-⚠️ **MyBatis 实体字段检查：** 确保 Entity 类包含 resultMap 中映射的全部字段（如 createTime、updateTime 等），缺少字段会导致 MyBatis 映射异常
-- **MySQL：** `mysql -u {应用用户} -p -e "SELECT 1;"`
-- **SQLite：** 文件存在即连接成功，无需额外测试
-然后按 Plan 切片逐任务 TDD（RED→写单元测试 + 集成测试 → GREEN→实现代码 → REFACTOR→重构），测试覆盖边界/中文/安全/分页等 8 类盲区
-有前端时加载 docs/design/design.css + docs/design/design-guide.md + docs/design/component-library.md，禁止自创样式
-门禁：openspec validate 通过 + CLAUDE.md 合规 + 数据库已初始化
+【有前端时】额外读取：docs/design/design.css + design-guide.md + component-library.md
+原型 docs/prototype/，规则：
+1. 静态数据展示 → API 动态渲染，保留布局和交互
+2. Mock 数据定义 → 映射 API 响应字段（字段名一致）
+3. 筛选/表单/表格列 → 对应 API 参数/请求体/响应字段
+4. 路由路径和模块划分保留不变
+5. 权限规则保留不变
+6. 视觉风格保留，禁止自创样式
+
+数据替换：
+- 原生JS：dataCache.xxx 替换 page2Data → renderXxx() API 渲染 → showXxxForm() 调真实 API
+- Vue：mounted() 调 API → data 替换静态数据 → 表单 axios.post/put
+- React：useEffect 调 API → useState 替换静态数据 → 表单 api.post/put
+- 模式：page2Data.staticData → fetch('/api/xxx').then(r=>r.json()).then(data=>data.list)
 ```
 
-**全部任务完成后，执行完整测试检查：**
-1. 运行全部单元测试，确保 100% 通过
-   - **Java/Maven：** `mvn test`
-   - **Python：** `pytest` 或 `python -m pytest`
-2. **需求-测试追溯：** 逐条对照 `openspec/specs/{domain}/spec.md`，确保每行需求至少对应一条测试用例
-   - 产出测试追溯矩阵 → `test/traceability.md`（多模块汇总到一个文件，按模块分 section）
-   - 缺失测试覆盖的需求条目，补写测试用例后再继续（格式：需求条目 | 测试方法 | 测试类 | 状态）
-3. 覆盖率检查（分层标准）：
-   - **核心业务模块**（预算校验/审批流/权限等纯逻辑）：**≥95%**
-   - **Service/业务层：** **≥90%**
-   - **Controller/API 层：** **≥85%**
-   - **Mapper/DAO/Repository：** 集成测试覆盖，不设行覆盖率硬线
-   - **UI/前端：** E2E 测试覆盖，不设行覆盖率
-   - **整体：** **≥85%**（实体类 POJO 可排除，不纳入覆盖率计算）
-覆盖率命令按技术栈执行：
-- **Java/Maven（JaCoCo）：** `mvn jacoco:report` → 查看 `target/site/jacoco/index.html`
-  - ⚠️ **首次使用需先配置 JaCoCo 插件到 pom.xml**，参考：
-    ```xml
-    <plugin>
-        <groupId>org.jacoco</groupId>
-        <artifactId>jacoco-maven-plugin</artifactId>
-        <version>0.8.11</version>
-        <configuration>
-            <excludes>
-                <exclude>**/entity/**</exclude>  <!-- 实体类 POJO 排除 -->
-            </excludes>
-        </configuration>
-        <executions>
-            <execution>
-                <id>prepare-agent</id>
-                <goals><goal>prepare-agent</goal></goals>
-            </execution>
-            <execution>
-                <id>report</id>
-                <phase>test</phase>
-                <goals><goal>report</goal></goals>
-            </execution>
-        </executions>
-    </plugin>
-    ```
-- **Python：** `pytest --cov=src --cov-report=term`
+---
 
-**🚪 门禁（完成时检查）：**
+#### 前端 Mock 改造（无前端时跳过整段）
+
+原型 `docs/prototype/` 是静态 Mock 数据，**开发阶段必须逐页改完，不允许遗留到测试阶段**。
+
+**6步改造流程：**
+1. **API 封装层：** 添加 `api.get/post/put/del`（原生JS）/ axios 实例（Vue）/ fetch 封装（React）
+2. **对照需求规格：** 打开 `openspec/specs/{domain}/spec.md`，逐条检查页面/组件完整 → 缺失即补充
+3. **数据层：** 静态数据定义 → API 动态加载；页面初始化调 API 缓存到全局/状态管理
+4. **渲染层：** 列表/表格/卡片 → API 数据渲染；查询条件栏 → 绑定参数调 API 筛选
+5. **CRUD 表单：** 保存/提交 → 调 POST/PUT；删除 → 调 DELETE，操作成功后刷新数据
+6. **样式：** 视觉风格保留原型，只替换数据来源和 API 调用
+
+**自检清单：**
+```
+□ 所有页面从 API 渲染，无静态硬编码数据
+□ 保存/提交/删除按钮全部调真实 API（无模拟 Toast/确认）
+□ 查询筛选功能已实现
+□ 页面渲染无报错
+□ 无技术栈常见问题（原生JS引号嵌套、Vue this指向、React hooks 依赖等）
+```
+
+---
+
+#### 全部任务完成后验证
+
+**① 前端改造验收（有前端时）：**
+1. 打开浏览器逐页检查 → 数据是否来自 API（对比数据库）→ 新建/删除是否真实读写 → 遗留 Mock 登记🔴到问题清单
+2. **对照原型 `docs/prototype/` 检查页面布局、字段名、筛选条件、表单交互是否一致** → 发现自创样式/布局走样登记🔴
+
+**② 测试检查：**
+1. 运行全部单元测试：`mvn test` / `pytest`，确保 100% 通过
+2. **需求-测试追溯：** 逐条对照 `openspec/specs/{domain}/spec.md`，产出 `docs/test/traceability.md`（需求条目 | 测试方法 | 测试类 | 状态），缺失补写
+3. **覆盖率检查：**
+   - 核心业务（预算/审批/权限）≥95% | Service ≥90% | Controller ≥85% | 整体 ≥85%
+   - Mapper/DAO/前端：集成测试覆盖，不设行覆盖率硬线
+   - 实体类 POJO 排除
+   - 命令：`mvn jacoco:report`（配 JaCoCo 插件后使用） / `pytest --cov=src --cov-report=term`
+
+---
+
+#### 🚪 门禁（完成时检查）
+
 ```
 □ openspec validate 通过
 □ CLAUDE.md 合规自检通过
 □ 数据库已初始化
 □ 全部单元测试通过
-□ 集成测试用例已编写（test/ 目录下存在集成测试文件）
 □ 需求-测试追溯矩阵已产出且覆盖完整
 □ 覆盖率达标（核心≥95% / Service≥90% / Controller≥85% / 整体≥85%）
-□ **MyBatis 实体字段映射检查（Java/MyBatis 项目）：** resultMap 中的字段与 Entity 类字段一致（如 createTime/updateTime 等常见遗漏字段）
-□ **前端与原型一致（有原型时）：** 页面布局、字段名、筛选条件、表单交互与原型一致，无新增的自创样式
+□ 实体-表字段映射检查通过（Java/MyBatis 的 resultMap ↔ Entity 字段一致；Python/SQLAlchemy 的 Model ↔ 表字段一致）
+□ 前端 Mock 数据已全部改造为真实 API（有前端时，无前端跳过）
+□ 前端与原型一致（有原型时），无自创样式
 ```
 
 ---
 
 ### 4. 测试保障
 
-1. **端到端集成测试（验证业务流程，不看页面长相）：** 运行自动化测试，确保 API → 数据库 → 业务逻辑的通路正确
-   - 用户创建 → 项目创建 → 工时报单 → 审核通过 → 统计看板数据正确
-   - 权限校验：越权操作被正确拦截
-2. **有前端时：自动视觉验收 — 页面完整性检查**
-   - 启动本地服务，遍历所有路由，逐页执行以下自动化检查：
-     - `browser_navigate(url)` 打开页面
-     - `browser_console("document.querySelector('link[href*=design]') ? 'OK' : 'design.css 未加载'")` — 检查样式文件已加载
-     - `browser_console("document.querySelectorAll('[src],link[href]').length > 0")` — 确认页面有资源加载
-     - `browser_console("getComputedStyle(document.body).getPropertyValue('--color-primary')")` — 验证 CSS 自定义属性已定义
-     - `browser_snapshot()` — 检查关键 UI 元素存在（侧边栏、顶部栏、内容区、表格、表单等）
-     - `browser_console(clear=true)` — 确认无 JS 报错
-   - 所有检查通过 → 视觉验收通过
-   - 任一项失败 → 修复后重新验收
-   - **SPA（单页应用）特殊处理：**
-     - 如果前端是 SPA（所有路由在同一个 HTML 文件通过 JS 切换），无需逐个 URL 打开
-     - 改用源码分析验证完整性：`grep "function render" index.html`（检查所有 render 函数存在）
-     - 检查路由定义：`grep "const routes" index.html`（确保所有模块在 routes 对象中注册）
-     - 检查弹窗/表单函数：`grep "function show" index.html`（确保 CRUD 弹窗全部实现）
-   - **登录墙处理：**
-     - SPA 页面可能需要登录才能渲染数据，此时直接 browser_navigate 无法看到完整页面
-     - 改用 read_file 读取源码验证页面结构和所有 render 函数
-     - 对于非认证页面（如 login.html 等公开页面），直接 browser_navigate 验证
+**统一问题清单：** 所有测试环节发现的问题统一登记到 `docs/test/issues.md`，格式如下：
 
-   **📋 页面完整性检查清单（逐项确认）：**
+```markdown
+## Bug #{编号}
+- **模块：** 所属功能模块
+- **问题描述：** 清晰描述问题和复现步骤
+- **截图/日志：** 如有
+- **发现阶段：** 集成测试 / 页面结构检查 / 用户测试
+- **严重度：** 🔴 高（功能不可用）/ 🟡 中（功能异常但可绕过）/ 🔵 低（UI/文案问题）
+- **状态：** ⏳ 待修复 / 🔧 修复中 / ✅ 已修复 / 📌 暂缓
+- **发现时间：** {日期}
+- **修复时间：** {日期}
+- **修复方式：** 简要说明如何修复
+```
 
-   **登录页检查（公开页面）：**
-   ```
-   □ 页面标题 — browser_console("document.title") → 正确
-   □ 样式文件加载 — browser_console("querySelector('link[href*=design]')") → OK
-   □ CSS 自定义属性 — browser_console("getComputedStyle(body).getPropertyValue('--color-primary')") → 有值
-   □ 用户名输入框 — browser_snapshot 可见 #username
-   □ 密码输入框 — browser_snapshot 可见 #password
-   □ 验证码输入框 — browser_snapshot 可见 captcha 字段
-   □ 验证码图片 — #captchaImage 存在，可点击刷新（onclick="refreshCaptcha()"）
-   □ **验证码图片渲染 — browser_console("querySelector('#captchaImage img').naturalWidth > 0") → true（确认图片实际显示，非空白）**
-   □ **验证码图片 src — browser_console("querySelector('#captchaImage img').src.indexOf('data:,') < 0") → true（确认 src 无双重编码）**
-   □ 登录按钮 — 点击触发登录 API 调用
-   □ 错误提示 — #loginError 存在，登录失败后显示
-   □ 登录 API 对接 — 调用了 /api/auth/login
-   □ 验证码 API 对接 — 调用了 /api/auth/captcha
-   □ JS 报错 — browser_console(clear=true) → 无影响性报错
-   ```
+**统一修复流程：**
 
-   **首页结构检查（SPA 主页面）：**
-   ```
-   □ 页面标题 — "项目名称" 正确
-   □ 导航栏 navbar — DOM 存在，显示用户信息
-   □ 侧边栏 sidebar — DOM 元素存在（ASIDE）
-   □ 内容区 mainContent — DOM 元素存在（MAIN）
-   □ 样式文件 — design.css 已加载
-   □ CSS 自定义属性 — --color-primary 已定义
-   ```
+1. 按严重度排序修复（🔴 → 🟡 → 🔵），每修复一个更新问题清单状态为 ✅
+2. 回归验证：修复后在对应环节重新执行测试，确认问题已解决且不引入新问题
+3. **最终检查：** 所有 🔴 🟡 问题均标记为 ✅ 或 📌（经用户确认暂缓），方可进入门禁
 
-   **路由模块源码检查（SPA 源码分析）：**
-   ```
-   □ 路由定义 — grep "const routes" index.html → 检查所有模块是否注册
-   □ 渲染函数 — grep "function render" index.html → 每个模块有对应 renderXxx()
-   □ 弹窗/表单函数 — grep "function show" index.html → 每个 CRUD 有对应的 showXxxForm()
-   □ 核心函数 — loadAllData() / navigate() / checkLogin() / showConfirm() / showToast()
-   □ 权限控制 — rolePermissions 每个角色有模块级权限定义
-   ```
+1. **端到端集成测试（验证业务流程，不看页面长相）：**
+   - **① 编写测试案例：** 对照 `openspec/specs/{domain}/spec.md` 逐条编写测试案例，每个核心流程一个案例（创建→流转/审批→统计、越权拦截等），写明测试场景、步骤、预期结果 → 保存到 `docs/test/test-cases.md`
+   - **② 执行自动化测试：** 运行测试，确保 API → 数据库 → 业务逻辑的通路正确
+   - 测试发现的问题 → 登记到 `docs/test/issues.md`，修复后更新状态
 
-   **CSS 组件完整性检查（design.css）：**
-   ```
-   □ CSS 变量 — --color-primary / --color-bg / --radius 等语义变量
-   □ 按钮 — .btn / .btn-primary / .btn-secondary / .btn-danger 全部定义
-   □ 表单 — .form-input / .form-select / .form-group / .form-label
-   □ 状态标签 — .badge / .badge-pending / .badge-approved / .badge-rejected
-   □ 弹窗 — .modal / .modal-header / .modal-body / .modal-footer
-   □ 侧边栏 — .sidebar / .sidebar-menu / .sidebar-menu li.active
-   □ 表格 — table / .table / th / td 样式
-   □ 分页 — .pagination / .page-btn / .page-btn.active / .page-info
-   □ 导航栏 — .navbar / .navbar-brand / .navbar-user / .navbar-right
-   □ Toast — .toast / .toast-success / .toast-error
-   ```
+2. **有前端时：页面结构检查 — 对照需求规格，确认所有页面模块和组件已注册**
 
-   **检查结果记录格式：**
-   ```
-   登录页: □/□ 项通过
-   首页结构: □/□ 项通过
-   路由模块: □/□ 项通过
-   CSS 组件: □/□ 项通过
-   结论: ✅ 视觉验收通过 / ❌ 修复后重新验收
-   ```
-3. **有前端时：E2E 浏览器测试（验证用户操作链路，不看数据对错）**
-   - 加载 `browser-testing-with-devtools` skill：`read_file D:\\hermes\\agent-skills\\skills\\browser-testing-with-devtools/SKILL.md → 按步骤执行`
-   - 产出 E2E 测试结论 → `docs/reports/{功能名}-e2e-report.md`
-   - 覆盖盲区：
+   根据前端技术栈选择对应的检查方式：
+
+   **原生 HTML/JS 单页应用（SPA）：**
+   - **源码分析：** 对照 `openspec/specs/{domain}/spec.md` 中的功能模块，逐条检查：
+     - 路由定义 — `grep "const routes" index.html` → 检查每个需求对应的模块是否已注册路由
+     - 渲染函数 — `grep "function render" index.html` → 每个模块有对应 renderXxx()
+     - 弹窗/表单函数 — `grep "function show" index.html` → 每个 CRUD 有对应的 showXxxForm()
+     - 核心函数 — loadAllData() / navigate() / checkLogin() / showConfirm() / showToast()
+     - 权限控制 — rolePermissions 每个角色有模块级权限定义
+   - **CSS 组件完整性检查（design.css）：**
+     ```text
+     □ CSS 变量 — --color-primary / --color-bg / --radius 等语义变量
+     □ 按钮 — .btn / .btn-primary / .btn-secondary / .btn-danger / .btn-sm
+     □ 表单 — .form-input / .form-select / .form-group / .form-label
+     □ 卡片 — .card / .card-title
+     □ 统计卡片 — .stat-card / .stat-grid / .stat-value / .stat-label
+     □ 筛选栏 — .filter-bar / .filter-bar .form-input / .filter-bar .form-select
+     □ 状态标签 — .badge / .badge-pending / .badge-approved / .badge-rejected
+     □ 弹窗 — .modal / .modal-title / .modal-footer
+     □ 侧边栏 — .sidebar / .sidebar-menu / .sidebar-menu li.active / .menu-icon
+     □ 表格 — .table-wrapper / table / th / td
+     □ 分页 — .pagination / .page-btn / .page-btn.active / .page-info
+     □ 导航栏 — .navbar / .navbar-brand / .navbar-user / .navbar-right
+     □ Toast — .toast / .toast-success / .toast-error / .toast-warning
      ```
-     E2E 盲区清单（有前端时）：
-     □ 入口路径: 根路由跳转逻辑（未登录→登录，已登录→首页）
-     □ 所有注册路由：遍历 ALL 路由，每条至少一个测试
-     □ UI 可见性：不同角色看到的按钮/链接是否正确
-     □ 设计规范类名：所有 <button> 含 btn 基类
-     □ 组件库类名：使用组件库类名，非内联 style
-     □ 弹窗表单：表单 fragment 不含 DOCTYPE
-     先写 E2E → 跑通 → 再标记完成
-     ```
-4. **变异测试：** 根据需求复杂度自动判断
-   - 读取 `openspec/specs/{domain}/spec.md`，检测是否有审批流/权限矩阵/状态机/复杂校验等模式
-   - 有复杂业务逻辑 → 自动执行变异测试
-   - 标准 CRUD（无复杂逻辑）→ 自动跳过
-5. **性能测试：** 根据 Phase 1 确认的非功能需求执行
-   - 有性能指标（页面加载 ≤3s、API 响应 ≤500ms、并发数等）→ 执行
-   - 无性能指标或嵌入式数据库（SQLite/H2）→ 跳过
-   - 页面加载时间 ≤ 3s（浏览器 DevTools 或 curl -w 测）
-   - API 响应时间 ≤ 500ms（单接口，curl -w "%{time_total}"）
-   - 并发 10 用户无错误（ab -n 100 -c 10 或 k6）
-6. 将测试结果写入 `docs/reports/{功能名}-test-report.md`
+   - **登录墙处理：** SPA 页面可能需要登录才能渲染，此时直接 `read_file index.html` 读源码验证
+
+   **Vue / React 等组件化框架：**
+   - **路由检查：** 查看路由配置文件（`src/router/` 或 `src/App.vue`），确认所有页面路由已注册
+   - **组件检查：** 确认每个路由对应的视图组件存在，且组件文件结构与需求一致
+   - **组件库/样式检查：** 确认使用的 UI 组件库（Element Plus / Ant Design 等）中，页面所需的组件类型（表格/弹窗/表单/分页等）已全部引入，无自创样式
+   - **API 对接检查：** 确认每个页面的 API 调用文件（如 `src/api/`）覆盖了全部后端接口
+
+   - **通用注意：** 页面渲染完整性、JS报错、按钮点击等动态验证 → 由用户测试（Playwright）覆盖，此处不做重复检查
+   - 发现的问题 → 登记到 `docs/test/issues.md`，修复后更新状态
+
+3. **有前端时：用户测试（Playwright 浏览器测试）** — 像真实用户一样逐功能验证
+
+   **前置条件：** 启动本地开发服务器，确保服务可访问
+
+   **测试流程：**
+
+   1. **编写 Playwright 测试脚本：** 使用 `playwright.sync_api`，有头模式（`headless=False`），模拟真实用户操作
+      - 登录 → 依次点击每个菜单 → 测试每个 CRUD 按钮
+      - 每个操作后断言页面正常渲染（Toast / 弹窗 / 数据刷新）
+      - 捕获 JS 控制台报错
+
+   2. **对照需求规格/原型，逐项验证：** 打开 `openspec/specs/{domain}/spec.md` 和原型 `docs/prototype/`，逐条确认每个需求对应的功能在浏览器中可用
+      - 记录已测试数量 vs 总数（如：功能模块 8/8、CRUD 操作 24/24、筛选栏 6/6）
+      - 逐项标记完成，全部打勾才算覆盖完整
+      - 如果发现需求中写了但页面上找不到的功能 → 登记到问题清单 🔴
+
+      ```text
+      □ 登录/退出功能完整（验证码 → 登录 → 首页 → 退出）
+      □ 首页仪表盘/看板数据正确
+      □ 每个管理模块 CRUD 完整（列表 → 新建 → 编辑 → 删除）
+      □ 带业务状态的模块（审批/流程等）状态流转正确（通过 → 驳回 → 重新提交）
+      □ 关联数据操作正常（如选择关联记录、级联删除等）
+      □ 搜索/筛选/查询功能正常（输入 → 查询 → 重置）
+      □ 修改密码功能
+      □ 菜单/导航切换正确
+      □ 分页组件正常翻页
+      □ 0 JS 报错
+      ```
+
+      **覆盖完整性自检：**
+      ```text
+      □ 页面结构检查输出的 N 个路由已全部点击验证
+      □ 页面结构检查输出的 M 个 CRUD 弹窗已全部打开并保存
+      □ 页面结构检查输出的 K 个权限角色已全部切换验证
+      □ 页面结构检查输出的 CSS 组件在用户测试中均正常渲染
+      ```
+
+   3. **发现问题 → 登记到问题清单：** 按上方统一格式登记到 `docs/test/issues.md`，修复后更新状态
+
+4. **汇总测试报告：** 将集成测试、页面结构检查、用户测试的结论和问题清单状态写入 `docs/test/reports/{功能名}-test-report.md`
 
 **🚪 门禁：**
 ```
 □ 集成测试 PASS
-□ 页面完整性检查通过（有前端时）
-□ E2E 测试已编写并全部通过（有前端时）
-□ 变异测试 PASS 或自动跳过（根据需求复杂度判断）
-□ 性能测试 PASS 或符合条件跳过（根据非功能需求判断）
+□ 页面结构检查通过（有前端时）
+□ **用户测试已执行且全部通过或有记录的 🔴 🟡 问题已全部修复/确认暂缓（有前端时）**
 ```
 **门禁通过后提交（feat 分支）：**
 ```bash
-git add docs/reports/ test/
+git add docs/test/ src/test/
 git commit -m "feat: {功能名} tests and reports"
 git push origin feat/{功能名}
 ```
@@ -592,34 +603,31 @@ git push origin feat/{功能名}
 
 > 如使用 GitHub，审查已在本阶段全部完成（含自动扫描+质量+安全），PR 仅用于 Merge，无需重复 Review。
 
-加载 Superpowers：`requesting-code-review` — `read_file D:\hermes\superpowers\skills\requesting-code-review/SKILL.md → 按步骤执行`
-加载 agent-skill：`code-review-and-quality` — `read_file D:\hermes\agent-skills\skills\code-review-and-quality/SKILL.md → 按步骤执行`
+加载 Superpowers：`requesting-code-review` — `read_file D:\hermes\superpowers\skills\requesting-code-review/SKILL.md` → 按步骤执行
+加载 agent-skill：`code-review-and-quality` — `read_file D:\hermes\agent-skills\skills\code-review-and-quality/SKILL.md` → 按步骤执行
 
 **质量审查内部顺序不可换：** 自动扫描 → 质量审查
 
-自动扫描：运行以下三条安全工具 + 品味检查（阶段性快照，审查时发现问题当场修；熵管理 cronjob 已由 Phase 0 配置，每周五自动运行不变式检查）
-  - trivy fs --severity CRITICAL,HIGH .
-  - semgrep --config=auto .
-  - gitleaks detect --source . -v
-  - bash scripts/taste-check.sh
+自动扫描：
+  - `semgrep --config=auto .`
+  - `gitleaks detect --source . -v`
+  - `bash scripts/taste-check.sh`
 
-质量审查（六维）：正确性/可读性/架构/安全/性能/品味 + 设计一致性
-产出：docs/reviews/{功能名}-{日期}.md
+质量审查（六维）：正确性/可读性/架构/安全/性能/品味
+   - 对照 `openspec/specs/{domain}/spec.md` 逐条确认需求已实现
+产出：`docs/reviews/{功能名}-{日期}.md`
 
 **安全审查（在质量审查之后执行）：**
 
-加载 agent-skill：`security-and-hardening` — `read_file D:\hermes\agent-skills\skills\security-and-hardening/SKILL.md → 按步骤执行`
+加载：`read_file D:\hermes\agent-skills\skills\security-and-hardening/SKILL.md` → 按步骤执行
 
-1. SQL注入/XSS/JWT密钥/密码BCrypt/鉴权/密钥硬编码
-2. 依赖安全审计：按技术栈检查已知漏洞
-   - **Java/Maven：** `mvn org.owasp:dependency-check-maven:check`
-   - **Python：** `pip-audit`
-3. 无 CRITICAL 级别漏洞才能通过
-4. 结论追加到 docs/reviews/{功能名}-{日期}.md
+1. SQL注入/XSS/密码BCrypt/鉴权/密钥硬编码检查
+2. 依赖审计：`mvn org.owasp:dependency-check-maven:check`（首次慢，可人工核验版本代替）
+3. 结论追加到审查报告
 
 **🚪 门禁：**
 ```
-□ 自动扫描：无 CRITICAL/HIGH 漏洞（trivy + semgrep + gitleaks + taste-check）
+□ 自动扫描：无 CRITICAL/HIGH 漏洞（semgrep + gitleaks + taste-check）
 □ 质量审查：PASS（六维：正确性/可读性/架构/安全/性能/品味）
 □ 安全审查：PASS（SQL注入/XSS/JWT/密码/鉴权/依赖审计无高危漏洞）
 □ 审查报告已写入 docs/reviews/{功能名}-{日期}.md（含质量审查 + 安全审查结论）
@@ -627,23 +635,15 @@ git push origin feat/{功能名}
 
 **门禁通过后执行归档（门禁不过不执行）：**
 
-先确认远程仓库已配置：
 ```bash
-git remote -v || { echo "❌ 未配置远程仓库，请先执行: git remote add origin <仓库地址>"; exit 1; }
-```
-
-```bash
-# 1. 推送功能分支到远程
+# 有 feat 分支时
 git push origin feat/{功能名}
+gh pr create --title "feat: {功能名}" --body "详见 openspec/specs/{domain}/spec.md" --base main
+# 合并后清理本地分支
+git checkout main && git pull origin main && git branch -d feat/{功能名}
 
-# 2. 创建 Pull Request
-gh pr create --title "feat: {功能名}" --body \
-  "详见 openspec/specs/{domain}/spec.md" \
-  --base main || echo "PR 已存在或手动创建"
-
-# 3. Squash Merge 并删除远程分支
-git checkout main && git pull origin main
-gh pr merge --squash --delete-branch --subject "feat: {功能名}"
+# 无 feat 分支（直接提交 main）时
+git push origin main
 ```
 
 **自检：**

@@ -32,13 +32,6 @@ naming:
     sql_table: lower_snake_case
     sql_column: lower_snake_case
     rest_endpoint: kebab-case
-  go:
-    exported: UpperCamelCase    # 大写开头=公开
-    internal: lowerCamelCase    # 小写开头=私有
-    constant: UPPER_SNAKE_CASE
-    sql_table: lower_snake_case
-    sql_column: lower_snake_case
-    rest_endpoint: kebab-case
 
 # --- 架构红线（分层违规直接阻断） ---
 architecture:
@@ -47,7 +40,6 @@ architecture:
     java: [types, config, repo, service, controller, ui]
     python: [models, routes, services, templates, utils]
     javascript: [routes, middleware, services, components, utils]
-    go: [handlers, services, repositories, models, web]
 
   # 禁止的跨层依赖（检查逻辑实现在 scripts/taste-check.sh 中）
   forbidden_crossing:
@@ -59,9 +51,6 @@ architecture:
       - from: templates   to: models       # 模板直接查DB
     javascript:
       - from: components  to: routes       # 组件直接调用API（应通过中间件层）
-    go:
-      - from: handlers     to: repositories  # handler 应通过 services 访问数据
-      - from: handlers     to: models         # handler 不应直接操作模型
 
   # 禁止代码模式（按栈）
   forbidden_patterns:

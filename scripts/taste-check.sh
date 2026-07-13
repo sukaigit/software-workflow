@@ -29,25 +29,21 @@ detect_tech_stack() {
   java_count=$(find "$SRC_DIR" -name "*.java" 2>/dev/null | wc -l)
   python_count=$(find "$SRC_DIR" -name "*.py" 2>/dev/null | wc -l)
   js_count=$(find "$SRC_DIR" -name "*.js" -o -name "*.ts" -o -name "*.jsx" -o -name "*.tsx" 2>/dev/null | wc -l)
-  go_count=$(find "$SRC_DIR" -name "*.go" 2>/dev/null | wc -l)
 
-  echo "文件统计: Java=${java_count}  Python=${python_count}  JS/TS=${js_count}  Go=${go_count}"
+  echo "文件统计: Java=${java_count}  Python=${python_count}  JS/TS=${js_count}"
 
   # 取出现最多的栈
-  if [ "$java_count" -ge "$python_count" ] && [ "$java_count" -ge "$js_count" ] && [ "$java_count" -ge "$go_count" ] && [ "$java_count" -gt 0 ]; then
+  if [ "$java_count" -ge "$python_count" ] && [ "$java_count" -ge "$js_count" ] && [ "$java_count" -gt 0 ]; then
     echo "检测到技术栈: Java"
     return 0
-  elif [ "$python_count" -ge "$js_count" ] && [ "$python_count" -ge "$go_count" ] && [ "$python_count" -gt 0 ]; then
+  elif [ "$python_count" -ge "$js_count" ] && [ "$python_count" -gt 0 ]; then
     echo "检测到技术栈: Python"
     return 1
-  elif [ "$js_count" -ge "$go_count" ] && [ "$js_count" -gt 0 ]; then
+  elif [ "$js_count" -gt 0 ]; then
     echo "检测到技术栈: JavaScript/TypeScript"
     return 2
-  elif [ "$go_count" -gt 0 ]; then
-    echo "检测到技术栈: Go"
-    return 3
   else
-    echo "未识别到已知代码文件（.java/.py/.js/.ts/.go），默认 Java 检查"
+    echo "未识别到已知代码文件（.java/.py/.js/.ts），默认 Java 检查"
     return 0
   fi
 }
@@ -61,7 +57,7 @@ echo "--- 通用检查 ---"
 
 # TODO 检查
 found_todo=0
-for ext in java py js ts jsx tsx go; do
+for ext in java py js ts jsx tsx; do
   if find "$SRC_DIR" -name "*.$ext" -exec grep -l "TODO" {} + 2>/dev/null | head -5 | grep -q .; then
     found_todo=1
   fi
@@ -241,50 +237,11 @@ javascript_checks() {
   done
 }
 
-# ---------- Go 检查 ----------
-go_checks() {
-  echo ""
-  echo "--- Go 检查 ---"
-
-  # fmt.Println / fmt.Print
-  if grep -rn 'fmt\.\(Print\|Println\|Printf\)(' "$SRC_DIR" --include="*.go" 2>/dev/null \
-    | grep -v '//.*fmt\.Print\|_test\.go' | head -10 | grep -q .; then
-    echo " 发现 fmt.Print/Println/Printf（生产代码建议用结构化日志库）"
-    HAS_ERRORS=1
-  fi
-
-  # 裸 error 忽略
-  if grep -rnP '^\s+_,\s*err\s*:=\s*.+$' "$SRC_DIR" --include="*.go" 2>/dev/null | head -5 | grep -q .; then
-    # 更精确：检查 err 赋值后没有检查
-    echo " 检查 Go error 处理..."
-    # Go 编译器会处理大部分，这里仅做提示
-  fi
-
-  # 函数超过 30 行
-  find "$SRC_DIR" -name "*.go" 2>/dev/null | while read f; do
-    awk '
-      /^func / { fn_name=$0; fn_start=NR; in_fn=1; line_count=0; braces=0; next }
-      in_fn {
-        line_count++
-        if ($0 ~ /\{/) braces++
-        if ($0 ~ /\}/) braces--
-        if (braces <= 0 && NR > fn_start+1) {
-          if (line_count > 30) {
-            printf " 函数超过 30 行（%d行）: %s:%d %s\n", line_count, FILENAME, fn_start, substr(fn_name,1,60)
-          }
-          in_fn=0
-        }
-      }
-    ' "$f" 2>/dev/null
-  done
-}
-
 # 根据检测到的栈执行对应检查
 case "$STACK_EXIT" in
   0) java_checks ;;
   1) python_checks ;;
   2) javascript_checks ;;
-  3) go_checks ;;
 esac
 
 echo ""
