@@ -365,7 +365,7 @@ read_file docs/api/接口定义.md — 了解 API 接口用于集成测试
 - 脚本头设一个 `DEMO_MODE` 开关，默认 `false`（正常速度）
 - DEMO_MODE = false：`headless: false`，`fill()` 快速填表，正常速度跑完
 - DEMO_MODE = true：`slowMo: 300`，`keyboard.type()` 逐字输入，加操作间延时
-- 用户想演示时改 `DEMO_MODE = true` 即可，不用改其他代码
+- 用户说「看看效果/演示一下」时，LLM 自动改为 `true` 再运行，不用用户手动改
 - 覆盖全部用户测试案例，逐条验证
 
 **执行测试：**
