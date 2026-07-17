@@ -316,37 +316,91 @@ read_file docs/plans/{slug}.md — 了解任务分解和验证方式
 read_file docs/api/接口定义.md — 了解 API 接口用于集成测试
 ```
 
-**🔍 功能覆盖检查：** 对比 Plan 中的 Task 列表与 `docs/test/test-cases.md` 中的测试案例，确保每个功能点都有测试覆盖
+**🔍 功能覆盖检查：** 对比 Plan 中的 Task 列表与测试案例，确保每个功能点都有测试覆盖
 - 每个 API endpoint 至少有一个正向测试案例
 - 每个业务规则（如仅待审核可编辑）至少有一个反向测试案例
 - 每个字段的边界条件至少有一个边界值测试案例
 
-**统一问题清单：** 测试发现的问题按格式登记到 `docs/test/issues.md`（模块/描述/严重度/状态）
+**📋 问题跟踪：** 所有测试发现的问题，无论发现阶段，统一登记到 `docs/test/issues.md`
+- 格式：`| 模块 | 问题描述 | 发现阶段 | 修复方式 | 状态 |`
+- 修复后更新状态为 ✅ 已修复，并补充修复方式
+- 遗留问题保持状态为 ⏳ 待修复
 
-1. **端到端集成测试（验证业务流程，不看页面长相）：**
-   - **编写测试案例：** 对照 `openspec/specs/{domain}/spec.md` 逐条编写，每个核心流程一个案例 → 保存到 `docs/test/test-cases.md`
-   - **执行测试：** 运行测试，确保 API → 数据库 → 业务逻辑通路正确
-   - 发现问题 → 登记到 `docs/test/issues.md`
+---
 
-2. **有前端时：页面结构检查**
-   **Vue：**
-   - **路由检查：** 查看 `docs/prototype/src/router/index.js`，确认所有页面路由已注册
-   - **组件检查：** 确认每个路由对应的视图组件存在，且与需求一致
-   - **样式检查：** 确认页面组件与 `design.css` 中的类名一致，无自创样式
-   - **API 对接检查：** 确认每个页面覆盖了全部后端接口
-   - 发现问题 → 登记到 `docs/test/issues.md`
+#### 步骤 1：端到端集成测试（API → DB）
 
-3. **有前端时：用户测试（Playwright有头模式）**
-   - 启动 dev server，编写 Playwright 脚本模拟用户操作
-   - 对照 `openspec/specs/{domain}/spec.md` + 原型 `docs/prototype/` 逐功能验证
-   - 发现问题 → 登记到 `docs/test/issues.md`
+**编写测试案例：** 对照 `openspec/specs/{domain}/spec.md` 逐条编写
+- 每个 Requirement → 至少一个**正向案例**（正常流程）
+- 每个约束条件 → 至少一个**反向案例**（异常/非法输入）
+- 每个数值字段 → 至少一个**边界值案例**（0/负数/最大值/最小值）
+- 每案例格式：`### TC-{模块}-{P/N/B}-{序号}: 描述` → 保存到 `docs/test/test-cases.md`
 
-4. **汇总测试报告：** 结论和问题清单状态写入 `docs/test/reports/{功能名}-test-report.md`
+**执行测试：**
+- 逐条执行，**一条不落**
+- 每个案例记录实际结果 ✅ 或 ❌（含失败原因）
+- 发现问题 → 立即登记到 `docs/test/issues.md`
+- 修复 bug → 回归测试 → 更新 issues.md 状态
+
+**产出物：** `docs/test/test-cases.md`（含全部执行结果标记）
+
+---
+
+#### 步骤 2：页面结构检查（有前端时）
+- 路由检查：查看 `router/index.js`，确认所有页面路由已注册
+- 组件检查：确认每个路由对应的视图组件存在
+- API 对接检查：确认每个页面覆盖了全部后端接口
+- 发现问题 → 登记到 `docs/test/issues.md`
+
+---
+
+#### 步骤 3：用户测试（Playwright 有头模式）
+
+**编写用户测试案例：** 对照 `openspec/specs/{domain}/spec.md` + 原型逐功能编写
+- 每个 Scenario → 至少一条用户测试案例
+- 每案例格式：`### UT-{模块}-{序号}: 描述` → 保存到 `docs/test/user-test-cases.md`
+- 描述清楚：操作步骤（点击/输入/选择）和预期结果
+
+**编写 Playwright 脚本：** 保存到 `docs/prototype/e2e.cjs`
+- 有头模式（`headless: false`），速度放慢（`slowMo: 200~300`）
+- 使用 `keyboard.type()` 逐字输入，按键可观察
+- 每个操作间加延时，能看到点击按钮、填表、弹窗等动作
+- 覆盖全部用户测试案例，逐条验证
+
+**执行测试：**
+- 逐条执行，**一条不落**
+- 每个案例记录实际结果 ✅ 或 ❌
+- 发现问题 → 立即登记到 `docs/test/issues.md`
+- 修复 bug → 回归测试 → 更新 issues.md 状态
+
+**产出物：** `docs/test/user-test-cases.md`（含全部执行结果标记）+ `docs/prototype/e2e.cjs`
+
+---
+
+#### 步骤 4：清理测试数据
+- 删除测试过程中新增的垃圾数据（如 Playwright 新增的测试记录）
+- 清理测试截图（可选）
+- 恢复环境到可验收状态
+
+---
+
+#### 步骤 5：汇总测试报告
+- 写入 `docs/test/reports/{功能名}-test-report.md`
+- 内容：汇总数据（正向/反向/边界值分类）、执行记录、关键验证点、以及测试过程中发现的**所有问题清单**（含严重度和状态）
+
+---
+
+**🔴 纪律（必须遵守）：**
+- 每个步骤**不能跳过**、不能简化
+- 发现 bug → 先登记到 issues.md → 再修复 → 回归 → 更新状态
+- 测试案例必须**全部执行完毕**，不能只跑一部分
+- 测试数据清理完成前，不能提交给用户验收
+- 诚实对待每个失败案例，不编造通过结果
 
 **提交（feat 分支）：**
 ```bash
 git add docs/test/ src/test/
-git commit -m "feat: {功能名} tests and reports"
+git commit -m "test: {功能名} integration + user tests, {命中数}/{总数} pass"
 git push origin feat/{功能名}
 ```
 
