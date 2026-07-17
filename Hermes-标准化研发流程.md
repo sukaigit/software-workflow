@@ -362,9 +362,9 @@ read_file docs/api/接口定义.md — 了解 API 接口用于集成测试
 - 描述清楚：操作步骤（点击/输入/选择）和预期结果
 
 **编写 Playwright 脚本：** 保存到 `docs/test/e2e.cjs`
-- 有头模式（`headless: false`），速度放慢（`slowMo: 200~300`）
-- 使用 `keyboard.type()` 逐字输入，按键可观察
-- 每个操作间加延时，能看到点击按钮、填表、弹窗等动作
+- 有头模式（`headless: false`），正常速度跑完全部案例
+- 使用 `keyboard.type()` 逐字输入（可选，`fill()` 更快）
+- 用户想看演示时：调慢 `slowMo` + 加延时，能看到点击/填表/弹窗
 - 覆盖全部用户测试案例，逐条验证
 
 **执行测试：**
