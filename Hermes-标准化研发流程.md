@@ -445,7 +445,12 @@ read_file docs/test/reports/{功能名}-test-report.md — 了解测试结论和
 - 根据项目实际技术栈动态生成 checklist（有 JWT 才检查 token，无登录跳过认证项）
 - 逐项检查并将结论追加到审查报告
 
-**归档（审查通过后执行）：**
+**用户确认：**
+- 呈现审查报告给用户
+- 用户确认无异议 → 继续归档
+- 用户提出意见 → 修改后重新审查
+
+**归档（审查通过+用户确认后执行）：**
 ```bash
 git push origin feat/{功能名}
 gh pr create --title "feat: {功能名}" --body "详见 openspec/specs/{domain}/spec.md" --base main
