@@ -114,7 +114,13 @@ gh repo create {项目名} --{可见性} --source=. --remote=origin --push 2>/de
    ```
 ```
 
-**产出物：** openspec/specs/（**唯一真相源**，原型变更已回流）+ docs/prototype/（页面原型，含设计风格说明 docs/prototype/design/design-guide.md + 系统管理套件）
+**产出物：** openspec/specs/（**唯一真相源 + 功能定义 + 业务规则**）+ docs/prototype/（**视觉参考 + 交互流程**，含设计风格说明 docs/prototype/design/design-guide.md + 系统管理套件）
+
+> **specs vs 原型的分工：**
+> - **specs** 决定「做什么」— 功能定义、字段、规则、枚举值、业务逻辑。后续阶段以 specs 为准。
+> - **原型** 决定「长什么样」— 页面布局、交互方式、UI文案、视觉风格。开发前端时参考。
+> - **⚠️ 前提条件：** 进入 Phase 2 前，specs 必须完整覆盖原型中所有页面（含系统管理模块），不能缺页。
+> - 检查方式：ls openspec/specs/ 列出模块 vs grep path: router/index.js 列出页面 → 一一对应
 
 ---
 
