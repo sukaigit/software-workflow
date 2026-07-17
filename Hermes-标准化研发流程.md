@@ -421,47 +421,29 @@ read_file docs/plans/{slug}.md — 了解任务分解
 read_file docs/test/reports/{功能名}-test-report.md — 了解测试结论和遗留问题
 ```
 
-自动扫描 → 质量审查 → 安全审查，结论写入审查报告后归档合并。Code Review 在本阶段完成，PR 仅用于 Merge。
+**🔍 前置检查：**
+- `git status` — 确认无未提交修改
+- `git log --oneline -3` — 确认有提交记录
+- `ls docs/test/reports/{功能名}-test-report.md` — 确认测试报告存在
+- 检查测试报告中无未关闭的严重问题
 
-> ⚠️ 确保已提交待审查内容（`git log` 有记录），否则审查会失败。
+**自动扫描：**
+1. `semgrep --config=auto --severity WARNING .` — 过滤 LOW 级别噪音
+2. `gitleaks detect --source . -v --report-format json` — 显示扫描范围和结果
 
-自动扫描：
-  - `semgrep --config=auto .`
-  - `gitleaks detect --source . -v`
+自动扫描结果写入审查报告（只记录真实问题，seed数据/测试代码等已知内容不记）。
 
-质量审查（六维：正确性/可读性/架构/安全/性能/品味）：
-  - 抽查 `openspec/specs/{domain}/spec.md` 中 20% 的需求条目，确认实现与需求一致
-  - 产出审查报告 `docs/reviews/{功能名}-{日期}.md`
+**质量审查（六维：正确性/可读性/架构/安全/性能/品味）：**
+- 抽查 `openspec/specs/{domain}/spec.md` 中 20% 的需求条目，确认实现与需求一致
+- 自动化指标作为辅助判断依据：
+  - 代码行数：`wc -l src/main/java/**/*.java` | tail -1
+  - 文件数：`find src -name "*.java" | wc -l`
+  - 测试覆盖率：确认测试案例数和通过率
+- 产出审查报告 `docs/reviews/{功能名}-{日期}.md`
 
-安全审查（在质量审查之后执行），逐项检查并将结论追加到审查报告：
-
-```text
-# 认证
-□ 密码使用 bcrypt/scrypt/argon2 加密（salt rounds ≥ 12）
-□ Session token 设置 httpOnly、secure、sameSite
-□ 登录接口有频率限制
-□ 密码重置 token 有时效
-
-# 鉴权
-□ 每个接口校验用户权限
-□ 用户只能操作自己的数据
-□ 管理员操作需校验角色
-
-# 输入
-□ 所有用户输入在边界层校验
-□ SQL 查询参数化
-□ HTML 输出编码转义
-
-# 数据
-□ 代码和版本控制中无密钥硬编码
-□ API 响应中排除敏感字段
-
-# 基础设施
-□ 安全响应头已配置（CSP、HSTS 等）
-□ CORS 限制为已知域名
-□ 依赖已审计漏洞
-□ 错误信息不暴露内部细节
-```
+**安全审查（在质量审查之后执行）：**
+- 根据项目实际技术栈动态生成 checklist（有 JWT 才检查 token，无登录跳过认证项）
+- 逐项检查并将结论追加到审查报告
 
 **归档（审查通过后执行）：**
 ```bash
