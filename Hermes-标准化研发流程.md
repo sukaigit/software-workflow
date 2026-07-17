@@ -126,6 +126,11 @@ gh repo create {项目名} --{可见性} --source=. --remote=origin --push 2>/de
 read_file docs/prototype/src/views/ 下每个页面组件（含系统管理套件）— 从 data 和 template 中提取字段定义、筛选条件、表单字段，作为数据库和 API 设计的输入**
 **⚠️ 原型与 specs 不一致时，以 specs 为准（原型变更应在 Phase 1 回流到 specs）**
 
+**🔍 功能覆盖检查：** 对比 router 中的路由列表与 spec 文件列表，确保没有页面遗漏
+- `ls openspec/specs/` → 列出已有 spec 模块
+- `grep "path:" docs/prototype/src/router/index.js` → 列出所有页面路由
+- 缺少 spec 的页面 → 先补充 spec，再继续架构设计
+
 **⚡ 原型 → 架构映射规则：**
 - 原型中的数据定义（Mock数据/静态列表）→ 数据库表字段
 - 原型的筛选条件栏 → API GET 查询参数
@@ -237,6 +242,10 @@ read_file docs/database/数据库设计.md — 了解数据库设计
 read_file docs/plans/{slug}.md — 加载执行 Plan
 ```
 
+**🔍 功能覆盖检查：** 对比 `docs/api/接口定义.md` 中的接口列表与 Plan 中的 Task 列表，确保没有接口遗漏实现
+- Plan 中每个 Task 应对应至少一个 API 接口
+- 接口定义中的每个 endpoint 都应在 Plan 中有对应 Task
+
 ### 按 Plan 逐任务自动执行（LLM 全过程自主执行，不追问用户）：
 
 **第一步：设置 todo 列表展示全部 Task**
@@ -300,6 +309,11 @@ read_file openspec/specs/{domain}/spec.md — 了解需求范围
 read_file docs/plans/{slug}.md — 了解任务分解和验证方式
 read_file docs/api/接口定义.md — 了解 API 接口用于集成测试
 ```
+
+**🔍 功能覆盖检查：** 对比 Plan 中的 Task 列表与 `docs/test/test-cases.md` 中的测试案例，确保每个功能点都有测试覆盖
+- 每个 API endpoint 至少有一个正向测试案例
+- 每个业务规则（如仅待审核可编辑）至少有一个反向测试案例
+- 每个字段的边界条件至少有一个边界值测试案例
 
 **统一问题清单：** 测试发现的问题按格式登记到 `docs/test/issues.md`（模块/描述/严重度/状态）
 
