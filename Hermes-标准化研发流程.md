@@ -285,6 +285,8 @@ Step 0：执行 sql/init.sql 建库建表（已存在则跳过）
 4. 路由路径和模块划分保留不变
 5. 权限规则保留不变
 6. 视觉风格保留，禁止自创样式
+7. **清除静态数据：** data() 中的 mock 数组（orders/partners/list 等硬编码数据）必须全部删除，改为 data 中的空数组/空对象，由 mounted() 调 API 填充
+8. **模板中的硬编码数据行：** template 中直接写死的 `<div>128 单</div>`、`<td>¥1,286,500</td>` 等硬编码数值，必须改为 `{{ }}` 插值表达式绑定 API 数据
 
 数据替换：
 - Vue：mounted() 调 API → data 替换静态数据 → 表单 axios.post/put
